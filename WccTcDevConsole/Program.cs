@@ -16,13 +16,6 @@ namespace WccTcDevConsole
     {
         private static void Main(string[] args)
         {
-            //var pl = GetPorts();
-
-            //foreach (var item in pl)
-            //{
-            //    Console.WriteLine(item);
-            //}
-
             var setting = new TcPluginBase.Settings();
 
             var wccTc = new WccFs(setting);
@@ -36,8 +29,7 @@ namespace WccTcDevConsole
 
 
             Console.ReadKey();
-
-            
+          
         }
 
     }
