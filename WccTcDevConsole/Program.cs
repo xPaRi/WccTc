@@ -40,25 +40,5 @@ namespace WccTcDevConsole
             
         }
 
-        private static List<string> GetPorts()
-        {
-            var psi = new ProcessStartInfo(@"wcc.exe", "-ports")
-            {
-                RedirectStandardOutput = true,
-                WindowStyle = ProcessWindowStyle.Hidden,
-                UseShellExecute = false
-            };
-
-            var proc = Process.Start(psi);
-            var myOutput = proc.StandardOutput;
-
-            proc.WaitForExit(2000);
-
-            if (!proc.HasExited)
-                return new List<string>();
-
-            return myOutput.ReadToEnd().Split(new[] {'\n'}, StringSplitOptions.RemoveEmptyEntries).Where(it=>it.StartsWith("COM")).ToList();
-
-        }
     }
 }
