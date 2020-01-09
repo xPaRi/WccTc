@@ -22,7 +22,7 @@ namespace WccTcDevConsole
 
 
             Console.WriteLine("--- GetFiles() ---");
-            foreach (var item in wccTc.GetFiles(new RemotePath("")))
+            foreach (var item in wccTc.GetFiles(new RemotePath("/")))
             {
                 Console.WriteLine(item.FileName);
             }

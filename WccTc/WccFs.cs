@@ -23,7 +23,8 @@ namespace WccTC
         public WccFs(Settings pluginSettings) 
             : base(pluginSettings)
         {
-            
+            if (String.IsNullOrEmpty(Title))
+                Title = "WccFs";
         }
 
 
@@ -45,19 +46,15 @@ namespace WccTC
                     return portList; 
                 
                 return new List<FindData>(){new FindData("<No COM port found>", FileAttributes.Offline)};
-            } 
-            
-            return GetFileAndDirectories(path, path);
-
-            if (path.Level > 0)
-            {
             }
 
-            return new List<FindData>()
-            {
-                new FindData(path),
-                new FindData(path.Level.ToString()),
-            };
+            var port = path.Segments[0];
+            var directory = "";
+
+            if (path.Segments.Length > 1)
+                directory = string.Join("/", path.Segments, 1, path.Segments.Length - 1);
+
+            return GetFileAndDirectories(port, directory);
         }
 
         public override string RootName
@@ -240,25 +237,36 @@ namespace WccTC
                 return new List<FindData> {new FindData("<wcc.exe not found>")};
 
             var output = process.StandardOutput;
+            var errput = process.StandardError;
 
             process.WaitForExit(5000); //5 sec
 
             if (!process.HasExited)
                 return new List<FindData> { new FindData("<wcc.exe process timeout>") };
 
-            return output.ReadToEnd().Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries)
+            var outString = output.ReadToEnd();
+            var errString = errput.ReadToEnd();
+
+            if (!string.IsNullOrEmpty(errString))
+                throw new Exception(errString);
+
+            return outString.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries)
                 .Where(it => it.StartsWith("COM"))
                 .Select(it=>new FindData(it, FileAttributes.Directory))
                 .ToList();
         }
 
+        /// <summary>
+        /// Načte seznam souborů a adresářů.
+        /// </summary>
+        /// <returns></returns>
         private static List<FindData> GetFileAndDirectories(string port, string path)
         {
             var process = Process.Start(
                 new ProcessStartInfo
                 {
                     FileName = "wcc.exe",
-                    Arguments = $"-p {port} -ls /*",
+                    Arguments = $"-p {port} -ls {path}/*",
                     CreateNoWindow = true,
                     WindowStyle = ProcessWindowStyle.Hidden,
                     UseShellExecute = false,
@@ -277,8 +285,32 @@ namespace WccTC
                 return new List<FindData> { new FindData("<wcc.exe process timeout>")};
 
             return output.ReadToEnd().Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(it => new FindData(it, FileAttributes.Normal))
+                .Select(it => NewFindData(it))
                 .ToList();
+        }
+
+        /// <summary>
+        /// Vrací položku 
+        /// </summary>
+        /// <param name="line"></param>
+        private static FindData NewFindData(string line)
+        {
+            var lineArray = line.Split(new[] { ' ', '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+
+            if (lineArray.Length != 3)
+                return new FindData("<unsupported line format>");
+
+            if (lineArray[0].Equals("d", StringComparison.OrdinalIgnoreCase))
+                return new FindData(lineArray[2], FileAttributes.Directory);
+
+            if (lineArray[0].Equals("f", StringComparison.InvariantCultureIgnoreCase))
+            {
+                ulong.TryParse(lineArray[1], out ulong fileSize);
+
+                return new FindData(lineArray[2], fileSize, FileAttributes.Normal);
+            }
+
+            return new FindData($"<unsupported file type '{lineArray[0]}'>");
         }
 
         #endregion
