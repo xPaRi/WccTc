@@ -23,13 +23,18 @@ namespace WccTC
         public WccFs(Settings pluginSettings) 
             : base(pluginSettings)
         {
-            if (String.IsNullOrEmpty(Title))
+            if (string.IsNullOrEmpty(Title))
                 Title = "WccFs";
+
+            MyLog(System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString());
         }
 
 
         public override IEnumerable<FindData> GetFiles(RemotePath path)
         {
+            MyLog(path, "GetFiles(...)");
+            
+
             if (!path.HasValue)
             {
                 return new List<FindData>()
@@ -57,23 +62,28 @@ namespace WccTC
             return GetFileAndDirectories(port, directory);
         }
 
-        public override string RootName
+        public override bool MkDir(RemotePath dir)
         {
-            get { return "Root Name"; }
-            set {}
+            MyLog(dir,"MkDir(...)");
+
+            return base.MkDir(dir);
         }
 
 
         #region Override stack
 
-        public override Task<FileSystemExitCode> GetFileAsync(RemotePath remoteName, string localName, CopyFlags copyFlags, RemoteInfo remoteInfo,
-            Action<int> setProgress, CancellationToken token)
+        public override string RootName
+        {
+            get => base.RootName;
+            set => base.RootName = value;
+        }
+
+        public override Task<FileSystemExitCode> GetFileAsync(RemotePath remoteName, string localName, CopyFlags copyFlags, RemoteInfo remoteInfo, Action<int> setProgress, CancellationToken token)
         {
             return base.GetFileAsync(remoteName, localName, copyFlags, remoteInfo, setProgress, token);
         }
 
-        public override Task<FileSystemExitCode> PutFileAsync(string localName, RemotePath remoteName, CopyFlags copyFlags, Action<int> setProgress,
-            CancellationToken token)
+        public override Task<FileSystemExitCode> PutFileAsync(string localName, RemotePath remoteName, CopyFlags copyFlags, Action<int> setProgress, CancellationToken token)
         {
             return base.PutFileAsync(localName, remoteName, copyFlags, setProgress, token);
         }
@@ -91,11 +101,6 @@ namespace WccTC
         public override bool RemoveDir(RemotePath dirName)
         {
             return base.RemoveDir(dirName);
-        }
-
-        public override bool MkDir(RemotePath dir)
-        {
-            return base.MkDir(dir);
         }
 
         public override ExecResult ExecuteOpen(TcWindow mainWin, RemotePath remoteName)
@@ -219,8 +224,10 @@ namespace WccTC
         /// Mají atribut adresářů.
         /// </summary>
         /// <returns></returns>
-        private static List<FindData> GetPorts()
+        private List<FindData> GetPorts()
         {
+            Log.Info("GetPorts");
+
             var process = Process.Start(
                 new ProcessStartInfo
                 {
@@ -260,7 +267,7 @@ namespace WccTC
         /// Načte seznam souborů a adresářů.
         /// </summary>
         /// <returns></returns>
-        private static List<FindData> GetFileAndDirectories(string port, string path)
+        private List<FindData> GetFileAndDirectories(string port, string path)
         {
             var process = Process.Start(
                 new ProcessStartInfo
@@ -285,7 +292,7 @@ namespace WccTC
                 return new List<FindData> { new FindData("<wcc.exe process timeout>")};
 
             return output.ReadToEnd().Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(it => NewFindData(it))
+                .Select(NewFindData)
                 .ToList();
         }
 
@@ -293,7 +300,7 @@ namespace WccTC
         /// Vrací položku 
         /// </summary>
         /// <param name="line"></param>
-        private static FindData NewFindData(string line)
+        private FindData NewFindData(string line)
         {
             var lineArray = line.Split(new[] { ' ', '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries);
 
@@ -311,6 +318,37 @@ namespace WccTC
             }
 
             return new FindData($"<unsupported file type '{lineArray[0]}'>");
+        }
+
+
+        private static void MyLog(Exception ex)
+        {
+            MyLog(ex.ToString());
+        }
+
+        private static void MyLog(RemotePath path, string comment)
+        {
+            var sb = new StringBuilder();
+
+            sb.AppendLine($"Path ({comment})");
+            sb.AppendLine($"  Level:     '{path.Level}'");
+            sb.AppendLine($"  Directory: '{path.Directory}'");
+            sb.AppendLine($"  Extension: '{path.Extension}'");
+            sb.AppendLine($"  FileName:  '{path.FileName}'");
+            sb.AppendLine($"  FileNameWithoutExtension: '{path.FileNameWithoutExtension}'");
+            sb.AppendLine($"  HasValue:  {path.HasValue}");
+            sb.AppendLine($"  Path:      '{path.Path}'");
+            sb.AppendLine($"  PathWithoutTrailingSlash: '{path.PathWithoutTrailingSlash}'");
+            sb.AppendLine($"  Segments.Length: {path.Segments.Length}");
+            sb.AppendLine($"  TrailingSlash:   {path.TrailingSlash}");
+            sb.AppendLine();
+
+            MyLog(sb.ToString());
+        }
+
+        private static void MyLog(string contents)
+        {
+            File.AppendAllLines(@"c:\temp\WccFs.log", new List<string>{contents});
         }
 
         #endregion
