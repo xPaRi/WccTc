@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.Remoting;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using TcPluginBase;
 using TcPluginBase.FileSystem;
+using WccTc;
 
 namespace WccTC
 {
@@ -20,51 +22,84 @@ namespace WccTC
     /// </remarks>
     public class WccFs : FsPlugin
     {
-        public WccFs(Settings pluginSettings) 
+        public WccFs(Settings pluginSettings)
             : base(pluginSettings)
         {
             if (string.IsNullOrEmpty(Title))
                 Title = "WccFs";
 
-            MyLog(System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString());
+            MyLog($"{Title}, ver. {System.Reflection.Assembly.GetExecutingAssembly().GetName().Version}");
         }
 
 
         public override IEnumerable<FindData> GetFiles(RemotePath path)
         {
-            MyLog(path, "GetFiles(...)");
-            
+            MyLog("GetFiles()", path);
 
-            if (!path.HasValue)
+            try
             {
-                return new List<FindData>()
+                switch (path)
                 {
-                    new FindData("<Path not specified>")
-                };
-            }
+                    case var pth when !path.HasValue:
+                        return new List<FindData> { new FindData("<Path not specified>") };
 
-            if (path.Level == 0)
+                    case var pth when path.Level == 0:
+                        var portList = GetPorts();
+
+                        if (portList.Count > 0)
+                            return portList;
+
+                        return new List<FindData> { new FindData("<No COM port found>", FileAttributes.Offline) };
+
+                    default:
+                        return GetFileAndDirectories(path);
+                }
+            }
+            catch (Exception ex)
             {
-                var portList = GetPorts();
-
-                if (portList.Count > 0)
-                    return portList; 
-                
-                return new List<FindData>(){new FindData("<No COM port found>", FileAttributes.Offline)};
+                MyLog(ex);
+                return new List<FindData> { new FindData("<Error>", FileAttributes.ReparsePoint) };
             }
-
-            var port = path.Segments[0];
-            var directory = "";
-
-            if (path.Segments.Length > 1)
-                directory = string.Join("/", path.Segments, 1, path.Segments.Length - 1);
-
-            return GetFileAndDirectories(port, directory);
         }
+
+
+        /// <summary>
+        /// Copy to ESP
+        /// </summary>
+        /// <param name="remoteName"></param>
+        /// <param name="localName"></param>
+        /// <param name="copyFlags"></param>
+        /// <param name="remoteInfo"></param>
+        /// <returns></returns>
+        public override FileSystemExitCode GetFile(RemotePath remoteName, string localName, CopyFlags copyFlags, RemoteInfo remoteInfo)
+        {
+            MyLog($"GetFile ('{localName}')", remoteName);
+
+            WccCall($"-p {remoteName.GetPort()} -down {remoteName.GetPathWithoutPort()} {localName}");
+
+            return FileSystemExitCode.OK; //return base.GetFile(remoteName, localName, copyFlags, remoteInfo);
+        }
+
+        /// <summary>
+        /// Download from ESP
+        /// </summary>
+        /// <param name="localName"></param>
+        /// <param name="remoteName"></param>
+        /// <param name="copyFlags"></param>
+        /// <returns></returns>
+        public override FileSystemExitCode PutFile(string localName, RemotePath remoteName, CopyFlags copyFlags)
+        {
+            MyLog($"PutFile ('{localName}')", remoteName);
+
+            WccCall($"-p {remoteName.GetPort()} -up {localName} {remoteName.GetPathWithoutPort()}");
+
+            return FileSystemExitCode.OK; //return base.PutFile(localName, remoteName, copyFlags);
+        }
+
 
         public override bool MkDir(RemotePath dir)
         {
-            MyLog(dir,"MkDir(...)");
+            MyLog("MkDir()", dir);
 
             return base.MkDir(dir);
         }
@@ -190,16 +225,6 @@ namespace WccTC
             return base.FindClose(o);
         }
 
-        public override FileSystemExitCode GetFile(RemotePath remoteName, string localName, CopyFlags copyFlags, RemoteInfo remoteInfo)
-        {
-            return base.GetFile(remoteName, localName, copyFlags, remoteInfo);
-        }
-
-        public override FileSystemExitCode PutFile(string localName, RemotePath remoteName, CopyFlags copyFlags)
-        {
-            return base.PutFile(localName, remoteName, copyFlags);
-        }
-
         public override string ToString()
         {
             return base.ToString();
@@ -219,6 +244,48 @@ namespace WccTC
 
         #region Helpers
 
+        private string WccCall(string arguments)
+        {
+            MyLog($"WccCall('{arguments}')");
+
+            const int TIMEOUT = 5000; //vyčasování 5 sec
+
+            var process = Process.Start(
+                new ProcessStartInfo
+                {
+                    FileName = "wcc.exe",
+                    Arguments = arguments,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                });
+
+            if (process == null)
+                throw new Exception("wcc.exe not found.");
+
+            var output = process.StandardOutput;
+            var errput = process.StandardError;
+
+            process.WaitForExit(TIMEOUT); //5 sec
+
+            if (!process.HasExited)
+                throw new Exception($"wcc.exe process timeout. (timeout: {TIMEOUT} ms)");
+
+            var outString = output.ReadToEnd();
+            var errString = errput.ReadToEnd();
+
+            if (!string.IsNullOrEmpty(errString))
+            {
+                throw new Exception(errString);
+            }
+
+            MyLog("WccCall (outString)", outString);
+
+            return outString;
+        }
+
         /// <summary>
         /// Načte seznam portů.
         /// Mají atribut adresářů.
@@ -226,40 +293,10 @@ namespace WccTC
         /// <returns></returns>
         private List<FindData> GetPorts()
         {
-            Log.Info("GetPorts");
-
-            var process = Process.Start(
-                new ProcessStartInfo
-                {
-                    FileName = "wcc.exe",
-                    Arguments = "-ports",
-                    CreateNoWindow = true,
-                    WindowStyle = ProcessWindowStyle.Hidden,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true
-                });
-
-            if (process == null)
-                return new List<FindData> {new FindData("<wcc.exe not found>")};
-
-            var output = process.StandardOutput;
-            var errput = process.StandardError;
-
-            process.WaitForExit(5000); //5 sec
-
-            if (!process.HasExited)
-                return new List<FindData> { new FindData("<wcc.exe process timeout>") };
-
-            var outString = output.ReadToEnd();
-            var errString = errput.ReadToEnd();
-
-            if (!string.IsNullOrEmpty(errString))
-                throw new Exception(errString);
-
-            return outString.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries)
+            return WccCall("-ports")
+                .Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries)
                 .Where(it => it.StartsWith("COM"))
-                .Select(it=>new FindData(it, FileAttributes.Directory))
+                .Select(it => new FindData(it, FileAttributes.Directory))
                 .ToList();
         }
 
@@ -267,32 +304,11 @@ namespace WccTC
         /// Načte seznam souborů a adresářů.
         /// </summary>
         /// <returns></returns>
-        private List<FindData> GetFileAndDirectories(string port, string path)
+        private List<FindData> GetFileAndDirectories(RemotePath path)
         {
-            var process = Process.Start(
-                new ProcessStartInfo
-                {
-                    FileName = "wcc.exe",
-                    Arguments = $"-p {port} -ls {path}/*",
-                    CreateNoWindow = true,
-                    WindowStyle = ProcessWindowStyle.Hidden,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true
-                });
-
-            if (process == null)
-                return new List<FindData> { new FindData("<wcc.exe not found>") };
-
-            var output = process.StandardOutput;
-
-            process.WaitForExit(5000); //5 sec
-
-            if (!process.HasExited)
-                return new List<FindData> { new FindData("<wcc.exe process timeout>")};
-
-            return output.ReadToEnd().Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(NewFindData)
+            return WccCall($"-p {path.GetPort()} -ls {path.GetPathWithoutPort()}/")
+                .Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(CreateFindData)
                 .ToList();
         }
 
@@ -300,37 +316,45 @@ namespace WccTC
         /// Vrací položku 
         /// </summary>
         /// <param name="line"></param>
-        private FindData NewFindData(string line)
+        private static FindData CreateFindData(string line)
         {
             var lineArray = line.Split(new[] { ' ', '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries);
 
-            if (lineArray.Length != 3)
-                return new FindData("<unsupported line format>");
-
-            if (lineArray[0].Equals("d", StringComparison.OrdinalIgnoreCase))
-                return new FindData(lineArray[2], FileAttributes.Directory);
-
-            if (lineArray[0].Equals("f", StringComparison.InvariantCultureIgnoreCase))
+            switch (lineArray)
             {
-                ulong.TryParse(lineArray[1], out ulong fileSize);
+                case var la when la.Length != 3:
+                    return new FindData("<unsupported line format>");
 
-                return new FindData(lineArray[2], fileSize, FileAttributes.Normal);
+                case var la when la[0].Equals("d", StringComparison.OrdinalIgnoreCase):
+                    return new FindData(la[2], FileAttributes.Directory);
+
+                case var la when la[0].Equals("f", StringComparison.InvariantCultureIgnoreCase):
+                    ulong.TryParse(la[1], out var fileSize);
+                    return new FindData(la[2], fileSize, FileAttributes.Normal);
+
+                default:
+                    return new FindData($"<unsupported file type '{lineArray[0]}'>");
             }
-
-            return new FindData($"<unsupported file type '{lineArray[0]}'>");
         }
 
 
-        private static void MyLog(Exception ex)
+        private void MyLog(Exception ex)
         {
             MyLog(ex.ToString());
         }
 
-        private static void MyLog(RemotePath path, string comment)
+        private void MyLog(string title, string contents)
+        {
+            MyLog($"{title}:");
+            MyLog(contents);
+        }
+
+        private void MyLog(string title, RemotePath path)
         {
             var sb = new StringBuilder();
 
-            sb.AppendLine($"Path ({comment})");
+            sb.AppendLine($"Path ({title})");
+            sb.AppendLine($"  Port:      '{path.GetPort()}'");
             sb.AppendLine($"  Level:     '{path.Level}'");
             sb.AppendLine($"  Directory: '{path.Directory}'");
             sb.AppendLine($"  Extension: '{path.Extension}'");
@@ -338,17 +362,30 @@ namespace WccTC
             sb.AppendLine($"  FileNameWithoutExtension: '{path.FileNameWithoutExtension}'");
             sb.AppendLine($"  HasValue:  {path.HasValue}");
             sb.AppendLine($"  Path:      '{path.Path}'");
+            sb.AppendLine($"  GetPathWithoutPort:       '{path.GetPathWithoutPort()}'");
             sb.AppendLine($"  PathWithoutTrailingSlash: '{path.PathWithoutTrailingSlash}'");
-            sb.AppendLine($"  Segments.Length: {path.Segments.Length}");
             sb.AppendLine($"  TrailingSlash:   {path.TrailingSlash}");
-            sb.AppendLine();
+            sb.AppendLine($"  Segments.Length: {path.Segments.Length}");
+
+            for (var i = 0; i < path.Segments.Length; i++)
+            {
+                sb.AppendLine($"    [{i}]: '{path.Segments[i]}'");
+            }
 
             MyLog(sb.ToString());
         }
 
-        private static void MyLog(string contents)
+        private void MyLog(string contents)
         {
-            File.AppendAllLines(@"c:\temp\WccFs.log", new List<string>{contents});
+#if DEBUG
+            var fullPath = Path.Combine(Path.GetTempPath(), "WccFs.log");
+
+            File.AppendAllLines($@"{fullPath}", new List<string> { contents });
+
+            Log.Debug(contents);
+
+            Debug.WriteLine(contents);
+#endif
         }
 
         #endregion
