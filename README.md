@@ -14,7 +14,7 @@ Nice for using with ESP32/R-TOS/LUA
 
 # Prerequisites
   - Total Commander from [Ghisler](https://www.ghisler.com/)
-  - wcc.exe from [whitecatboard/whitecat-console](https://www.silabs.com/products/development-tools/software/usb-to-uart-bridge-vcp-drivers) ([DIRECT DOWNLOAD](http://downloads.whitecatboard.org/console/windows/wcc.exe))
+  - wcc.exe from [whitecatboard/whitecat-console](https://github.com/whitecatboard/whitecat-console) ([DIRECT DOWNLOAD](http://downloads.whitecatboard.org/console/windows/wcc.exe))
   - Copy wcc.exe to ```Windows/Sytem32``` (acording with *White Cat Board instructions*)
 
 # Some pictures
