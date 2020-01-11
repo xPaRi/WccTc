@@ -18,10 +18,10 @@ Nice for using with ESP32/R-TOS/LUA
   - Copy wcc.exe to ```Windows/Sytem32``` (acording with *White Cat Board instructions*)
 
 # Some pictures
-![](https://github.com/xPaRi/WccTc/blob/master/pick_000.png) 
-![](https://github.com/xPaRi/WccTc/blob/master/pick_001.png) 
-![](https://github.com/xPaRi/WccTc/blob/master/pick_002.png) 
-![](https://github.com/xPaRi/WccTc/blob/master/pick_003.png) 
+![](https://github.com/xPaRi/WccTc/blob/master/pictures/pick_000.png) 
+![](https://github.com/xPaRi/WccTc/blob/master/pictures/pick_001.png) 
+![](https://github.com/xPaRi/WccTc/blob/master/pictures/pick_002.png) 
+![](https://github.com/xPaRi/WccTc/blob/master/pictures/pick_003.png) 
 
 # License
 MIT (*Free Software*)
