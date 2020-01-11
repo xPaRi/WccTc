@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Ports;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.Remoting;
@@ -52,7 +53,16 @@ namespace WccTC
                         return new List<FindData> { new FindData("<No COM port found>", FileAttributes.Offline) };
 
                     default:
-                        return GetFileAndDirectories(path);
+                        {
+                            var result = GetFileAndDirectories(path);
+
+                            if (result.Count == 0)
+                            {
+                                result.Add(new FindData("")); //musí to tu být, jinak nejde přepnout do adresáře, ani jej smazat
+                            }
+
+                            return result;
+                        }
                 }
             }
             catch (Exception ex)
@@ -101,7 +111,33 @@ namespace WccTC
         {
             MyLog("MkDir()", dir);
 
-            return base.MkDir(dir);
+            var result = ComCall(dir.GetPort(), $"os.mkdir('{dir.GetPathWithoutPort()}')\r\r");
+
+            return result.StartsWith("true", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public override bool DeleteFile(RemotePath fileName)
+        {
+            MyLog("DeleteFile()", fileName);
+
+            if (string.IsNullOrEmpty(fileName))
+            {
+                MyLog("DeleteFile (no exists file");
+                return true;
+            }
+
+            var result = ComCall(fileName.GetPort(), $"os.remove('{fileName.GetPathWithoutPort()}')\r\r");
+
+            return result.StartsWith("true", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public override bool RemoveDir(RemotePath dirName)
+        {
+            MyLog("RemoveDir()", dirName);
+
+            var result = ComCall(dirName.GetPort(), $"os.remove('{dirName.GetPathWithoutPort()}')\r\r");
+
+            return result.StartsWith("true", StringComparison.OrdinalIgnoreCase);
         }
 
 
@@ -126,16 +162,6 @@ namespace WccTC
         public override FileSystemExitCode RenMovFile(RemotePath oldName, RemotePath newName, bool move, bool overwrite, RemoteInfo remoteInfo)
         {
             return base.RenMovFile(oldName, newName, move, overwrite, remoteInfo);
-        }
-
-        public override bool DeleteFile(RemotePath fileName)
-        {
-            return base.DeleteFile(fileName);
-        }
-
-        public override bool RemoveDir(RemotePath dirName)
-        {
-            return base.RemoveDir(dirName);
         }
 
         public override ExecResult ExecuteOpen(TcWindow mainWin, RemotePath remoteName)
@@ -165,11 +191,15 @@ namespace WccTC
 
         public override bool Disconnect(RemotePath disconnectRoot)
         {
+            MyLog("Disconnect (disconnectRoot)", disconnectRoot);
+
             return base.Disconnect(disconnectRoot);
         }
 
         public override void StatusInfo(string remoteDir, InfoStartEnd startEnd, InfoOperation infoOperation)
         {
+            MyLog($"StatusInfo ({remoteDir}; {startEnd}; {infoOperation})");
+
             base.StatusInfo(remoteDir, startEnd, infoOperation);
         }
 
@@ -185,6 +215,8 @@ namespace WccTC
 
         public override string GetLocalName(RemotePath remoteName, int maxLen)
         {
+            MyLog($"GetLocalName({maxLen})", remoteName);
+
             return base.GetLocalName(remoteName, maxLen);
         }
 
@@ -207,6 +239,8 @@ namespace WccTC
 
         protected override bool ProgressProc(string source, string destination, int percentDone)
         {
+            MyLog($"ProgressProc {source}; {destination}; {percentDone}");
+
             return base.ProgressProc(source, destination, percentDone);
         }
 
@@ -227,22 +261,59 @@ namespace WccTC
 
         public override string ToString()
         {
+            MyLog($"ToString: {base.ToString()}");
             return base.ToString();
-        }
-
-        public override bool Equals(object obj)
-        {
-            return base.Equals(obj);
-        }
-
-        public override int GetHashCode()
-        {
-            return base.GetHashCode();
         }
 
         #endregion
 
         #region Helpers
+
+        private string ComCall(string port, string command)
+        {
+            MyLog($"ComCall (port: '{port}'; command: '{command}')");
+
+            using (var serialPort = new SerialPort(port, 115200)
+            {
+                ReadTimeout = 500,
+                WriteTimeout = 500,
+                Encoding = Encoding.ASCII,
+                DataBits = 8,
+                StopBits = StopBits.One,
+                Parity = Parity.None,
+                Handshake = Handshake.XOnXOff
+            })
+            {
+                var result = string.Empty;
+
+                serialPort.Open();
+
+                serialPort.WriteLine($"\r{command}')\r");
+
+                //--- Odpověď z ESP
+                for (var i = 0; i < 10; i++)
+                {
+                    try
+                    {
+                        result = serialPort.ReadLine();
+                        
+                        if (result.StartsWith("true", StringComparison.OrdinalIgnoreCase) || result.StartsWith("nil", StringComparison.OrdinalIgnoreCase))
+                        {
+                            break;
+                        }
+                    }
+                    catch (TimeoutException)
+                    {}
+                }
+                //---
+
+                serialPort.Close();
+
+                MyLog($"ComCall (result: '{result}'");
+
+                return result;
+            }
+        }
 
         private string WccCall(string arguments)
         {
@@ -378,7 +449,7 @@ namespace WccTC
         private void MyLog(string contents)
         {
 #if DEBUG
-            var fullPath = Path.Combine(Path.GetTempPath(), "WccFs.log");
+            var fullPath = Path.Combine(PluginFolder, "WccFs.log");
 
             File.AppendAllLines($@"{fullPath}", new List<string> { contents });
 
