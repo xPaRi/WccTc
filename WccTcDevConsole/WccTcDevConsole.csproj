@@ -61,10 +61,5 @@
       <Name>WccTc</Name>
     </ProjectReference>
   </ItemGroup>
-  <ItemGroup>
-    <None Include="wcc.exe">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

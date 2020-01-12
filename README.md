@@ -1,5 +1,4 @@
 # WCC FS for Total Commander
----
 White Cat Console File System plugin for Total Commander.
 Nice for using with ESP32/RTOS/LUA
 
