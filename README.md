@@ -17,6 +17,10 @@ Nice for using with ESP32/RTOS/LUA
   - wcc.exe from [whitecatboard/whitecat-console](https://github.com/whitecatboard/whitecat-console) ([DIRECT DOWNLOAD](http://downloads.whitecatboard.org/console/windows/wcc.exe))
   - Copy wcc.exe to ```Windows/Sytem32``` (acording with *White Cat Board instructions*)
 
+#Under the hood
+  - It's programmed in C#, .NET Framework 4.7.2, MS Visual Studio 2019
+  - Plugin is based on [TcBuild](https://github.com/r-Larch/TcBuild)
+  
 # Some pictures
 ![](https://github.com/xPaRi/WccTc/blob/master/pictures/pick_000.png)
 
