@@ -319,7 +319,7 @@ namespace WccTC
         {
             MyLog($"WccCall('{arguments}')");
 
-            const int TIMEOUT = 5000; //vyčasování 5 sec
+            const int TIMEOUT = 60000; //vyčasování 60 sec
 
             var process = Process.Start(
                 new ProcessStartInfo
@@ -339,7 +339,7 @@ namespace WccTC
             var output = process.StandardOutput;
             var errput = process.StandardError;
 
-            process.WaitForExit(TIMEOUT); //5 sec
+            process.WaitForExit(TIMEOUT);
 
             if (!process.HasExited)
                 throw new Exception($"wcc.exe process timeout. (timeout: {TIMEOUT} ms)");
