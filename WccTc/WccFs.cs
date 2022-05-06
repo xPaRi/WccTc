@@ -319,7 +319,7 @@ namespace WccTC
         {
             MyLog($"WccCall('{arguments}')");
 
-            const int TIMEOUT = 60000; //vyčasování 60 sec
+            const int TIMEOUT = 180000; //vyčasování 180 sec
 
             var process = Process.Start(
                 new ProcessStartInfo
